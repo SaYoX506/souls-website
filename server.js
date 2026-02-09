@@ -99,14 +99,19 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         }
     }
 
-    // 3. Local Mode Fallback (Not recommended for Vercel, but good for local dev)
-    // We need to verify if we can write to disk (usually no on Vercel)
-    console.warn('⚠️ GitHub tokens missing, attempting local save (may fail on Vercel)');
-    const uploadDir = path.join(__dirname, 'public', 'useravatarandbanner');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    // 3. Local Mode Fallback (Not recommended for Vercel)
+    console.warn('⚠️ GitHub tokens missing, attempting local save');
 
-    fs.writeFileSync(path.join(uploadDir, filename), req.file.buffer);
-    res.json({ path: `useravatarandbanner/${filename}` });
+    try {
+        const uploadDir = path.join(__dirname, 'public', 'useravatarandbanner');
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+        fs.writeFileSync(path.join(uploadDir, filename), req.file.buffer);
+        res.json({ path: `useravatarandbanner/${filename}` });
+    } catch (e) {
+        console.error("Local save failed (Read-only FS?):", e);
+        res.status(500).json({ error: "Upload failed: Read-only filesystem" });
+    }
 });
 
 // Export for Vercel (Serverless)
