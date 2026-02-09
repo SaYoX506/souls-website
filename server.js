@@ -22,56 +22,22 @@ app.get('/dashboard', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-// Configure Storage
-const uploadDir = path.join(__dirname, 'public', 'useravatarandbanner');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const userId = req.body.userId;
-        const type = req.body.type; // 'avatar' or 'banner'
-
-        if (!userId || !type) {
-            return cb(new Error('Missing userId or type'));
-        }
-
-        const ext = path.extname(file.originalname) || '.png';
-        // NUCLEAR FIX: Add timestamp to filename to FORCE unique URL
-        // e.g. hxkn_avatar_173892.png
-        const timestamp = Date.now();
-        const finalName = `${userId}_${type}_${timestamp}${ext}`;
-
-        // Cleanup: Delete ALL old versions of this file (avatar or banner)
-        try {
-            const files = fs.readdirSync(uploadDir);
-            const prefix = `${userId}_${type}`;
-
-            files.forEach(f => {
-                // Check if file starts with "hxkn_avatar"
-                if (f.startsWith(prefix)) {
-                    try {
-                        fs.unlinkSync(path.join(uploadDir, f));
-                        console.log(`🗑️ Deleted old version: ${f}`);
-                    } catch (e) {
-                        // Ignore errors (e.g. file locked), but try to proceed
-                        console.error(`Could not delete ${f}:`, e.message);
-                    }
-                }
-            });
-        } catch (err) {
-            console.error('Cleanup warning:', err);
-        }
-
-        cb(null, finalName);
-    }
-});
-
+// Configure Storage (Memory Storage for Vercel/Cloud)
+const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
+
+const { uploadToGitHub, getJson, saveJson } = require('./lib/github');
+
+// API: List Emojis
+app.get('/api/emojis', (req, res) => {
+    const emojiDir = path.join(__dirname, 'public', 'emojis');
+    fs.readdir(emojiDir, (err, files) => {
+        if (err) return res.json([]);
+        // Filter for images/gifs only
+        const emojis = files.filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
+        res.json(emojis);
+    });
+});
 
 const { uploadToGitHub, getJson, saveJson } = require('./lib/github');
 
@@ -112,26 +78,19 @@ app.post('/api/save', async (req, res) => {
 app.post('/upload', upload.single('image'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    // 1. Check if we should use GitHub (Vercel Mode)
+    // 1. Generate Unique Filename
+    const userId = req.body.userId;
+    const type = req.body.type;
+    const ext = path.extname(req.file.originalname) || '.png';
+    const filename = `${userId}_${type}_${Date.now()}${ext}`;
+
+    // 2. Check if we should use GitHub (Vercel Mode)
     if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPO) {
         try {
-            console.log(`🚀 Uploading to GitHub: ${req.file.filename}`);
-            // Read the file we just saved locally (Multer saves it to tmp/uploads first)
-            const filePath = path.join(uploadDir, req.file.filename);
-            const fileBuffer = fs.readFileSync(filePath);
-
-            // Upload to GitHub
-            // Note: The library function expects filename, we give it the unique one
-            const rawUrl = await uploadToGitHub(req.file.filename, fileBuffer);
-
-            // Cleanup local file (since we are on Vercel/Serverless, or just don't need it if using GitHub)
-            // But if we are local, we might want to keep it? 
-            // Better to keep consistent: If GitHub mode, we rely on GitHub.
-            // On Vercel, this local file would be gone anyway.
-
+            console.log(`🚀 Uploading to GitHub: ${filename}`);
+            // Buffer is available directly in req.file.buffer with memoryStorage
+            const rawUrl = await uploadToGitHub(filename, req.file.buffer);
             console.log(`✅ GitHub Upload Success: ${rawUrl}`);
-
-            // Return the GitHub Raw URL directly
             return res.json({ path: rawUrl });
 
         } catch (err) {
@@ -140,11 +99,14 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         }
     }
 
-    // 2. Local Mode (Default)
-    // Return path relative to 'public' folder
-    const relativePath = `useravatarandbanner/${req.file.filename}`;
-    console.log(`✅ Local Upload: ${req.file.filename}`);
-    res.json({ path: relativePath });
+    // 3. Local Mode Fallback (Not recommended for Vercel, but good for local dev)
+    // We need to verify if we can write to disk (usually no on Vercel)
+    console.warn('⚠️ GitHub tokens missing, attempting local save (may fail on Vercel)');
+    const uploadDir = path.join(__dirname, 'public', 'useravatarandbanner');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+    fs.writeFileSync(path.join(uploadDir, filename), req.file.buffer);
+    res.json({ path: `useravatarandbanner/${filename}` });
 });
 
 app.listen(port, () => {

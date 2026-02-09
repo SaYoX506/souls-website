@@ -5,13 +5,13 @@ let db = {
         id: 'hxkn', name: 'h.xkn', avatar: '', banner: '', avatarUrl: '', bannerUrl: '',
         colorGlow: '#ffffff', colorText: '#ffffff', colorBar: '#ffffff', colorBg: '#000000',
         level: 0, xp: 0, password: null, logs: [], rewards: {},
-        status: { emoji: '1019-c-cry.gif', text: '' }
+        status: { emoji: '', text: '' }
     },
     chidori: {
         id: 'chidori', name: 'Chidori', avatar: '', banner: '', avatarUrl: '', bannerUrl: '',
         colorGlow: '#ffffff', colorText: '#ffffff', colorBar: '#ffffff', colorBg: '#000000',
         level: 0, xp: 0, password: null, logs: [], rewards: {},
-        status: { emoji: '1022-c-photo.gif', text: '' }
+        status: { emoji: '', text: '' }
     }
 };
 
@@ -26,17 +26,24 @@ const IS_LOGIN_PAGE = !!document.getElementById('selectionScreen');
 const IS_DASHBOARD_PAGE = !!document.getElementById('mainWindow');
 
 // Emoji Files (Mapped to /emojis route)
-const EMOJI_FILES = [
-    "1019-c-cry.gif", "1022-c-photo.gif", "1089-scarletgun.png", "11453-moderniadum.png", "1186-taiga-stare.png",
-    "1272-boyfighting.png", "1335-bleh.png", "13554-kaorukodevilishsmile.png", "1359-c-wow.gif", "1493-c-twirl.gif",
-    "1538-marinkitagawa-smile.gif", "1573-d-gimme.gif", "1576-boyangry.png", "1593-c-tears.gif", "1626-marinkitagawa-blush.gif",
-    "16329-aqua-crying.png", "163320-usamiangry.png", "1660-giggle.gif", "168691-sakugun.png", "1720-kanna-uhh.png",
-    "17302-anime-albedoscold.png", "175089-anyasly.png", "17963-reigun.png", "1848-marinkitagawa-sad.gif", "19168-boring.png",
-    "2051-kitagawa-embarrassed.png", "21315-thinking.png", "213792-kaorukocute.png", "2146-c-bite.gif", "227860-kaorukodisgust.png",
-    "229140-kyokosigh.png", "2322-shyasf.gif", "23410-taigablush.gif", "2371-marin-touched.png", "2393_bakuNO.png",
-    "239945-anyadisgust.png", "2415-100-kannapat.gif", "2425-marin-peak.png", "24878-cute-shy-anime-girl.png", "2575_Suicidekanna.png",
-    "2590-marin-shy.gif", "2594-laugh.gif", "2598-doroshifty.png", "2630-marinkitagawa-freaked.gif", "2825-boyconfused.png"
-];
+// Emojis will be loaded from server
+let EMOJI_FILES = [];
+
+// Fetch Emojis from API
+async function setupEmojis() {
+    try {
+        const res = await fetch('/api/emojis');
+        if (res.ok) {
+            EMOJI_FILES = await res.json();
+            // Map legacy objects if needed, but simple array is fine for now
+            emojisList = EMOJI_FILES.map(f => ({ file: f, name: f.split('.')[0] }));
+        }
+    } catch (e) {
+        console.error('Failed to load emojis', e);
+        EMOJI_FILES = [];
+        emojisList = [];
+    }
+}
 
 const SERVER_URL = ''; // Relative path since we serve from same origin
 
@@ -206,10 +213,14 @@ function renderIdentity() {
     refreshXP(); refreshViewTier(); renderSignalLogs();
 
     // Status
-    const st = currentUser.status || { emoji: '1019-c-cry.gif', text: '' };
-    // Fallback if emoji is old text format
-    const emoFile = st.emoji.includes('.') ? st.emoji : '1019-c-cry.gif';
-    document.getElementById('winStatusEmoji').src = `emojis/${emoFile}`;
+    const st = currentUser.status || { emoji: '', text: '' };
+    const emoImg = document.getElementById('winStatusEmoji');
+    if (st.emoji && !st.emoji.includes('undefined') && st.emoji !== '') {
+        emoImg.src = `emojis/${st.emoji}`;
+        emoImg.style.display = 'block';
+    } else {
+        emoImg.style.display = 'none';
+    }
     document.getElementById('winStatusText').textContent = st.text;
 }
 
@@ -376,9 +387,16 @@ function openEditModal() {
     document.getElementById('editPass').value = '';
 
     // Status Inputs
-    const st = currentUser.status || { emoji: '1019-c-cry.gif', text: '' };
-    selectedStatusEmoji = st.emoji.includes('.') ? st.emoji : '1019-c-cry.gif';
-    document.getElementById('editStatusEmojiPreview').src = `emojis/${selectedStatusEmoji}`;
+    const st = currentUser.status || { emoji: '', text: '' };
+    selectedStatusEmoji = st.emoji || '';
+
+    const preview = document.getElementById('editStatusEmojiPreview');
+    if (selectedStatusEmoji) {
+        preview.src = `emojis/${selectedStatusEmoji}`;
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+    }
     document.getElementById('editStatusText').value = st.text;
 }
 
@@ -398,8 +416,15 @@ function toggleStatusPicker() {
 
 function selectStatusEmoji(filename) {
     selectedStatusEmoji = filename;
-    document.getElementById('editStatusEmojiPreview').src = `emojis/${filename}`;
+    const preview = document.getElementById('editStatusEmojiPreview');
+    preview.src = `emojis/${filename}`;
+    preview.style.display = 'block';
     document.getElementById('statusEmojiPicker').classList.add('hidden');
+}
+
+function clearStatusEmoji() {
+    selectedStatusEmoji = '';
+    document.getElementById('editStatusEmojiPreview').style.display = 'none';
 }
 
 function saveProfile() {
@@ -500,20 +525,10 @@ function logout() {
 }
 function closeModals() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); }
 
-// Toast System
+// Toast System (Silent Mode requested)
 function showToast(msg, type = 'success') {
-    const cont = document.getElementById('toast-container');
-    const t = document.createElement('div');
-    t.className = `toast ${type}`;
-    t.innerHTML = `
-        <div class="w-2 h-2 rounded-full ${type === 'success' ? 'bg-green-400' : 'bg-red-400'}"></div>
-        <span>${msg}</span>
-    `;
-    cont.appendChild(t);
-    setTimeout(() => {
-        t.style.animation = 'toast-out 0.3s forwards';
-        setTimeout(() => t.remove(), 300);
-    }, 3000);
+    // console.log(`[Toast] ${type}: ${msg}`);
+    // User requested removal of notifications
 }
 
 async function save() {
