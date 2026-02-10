@@ -572,9 +572,30 @@ function logout() {
 function closeModals() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); }
 
 // Toast System (Silent Mode requested)
+// Toast System
 function showToast(msg, type = 'success') {
-    // console.log(`[Toast] ${type}: ${msg}`);
-    // User requested removal of notifications
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `p-4 rounded-2xl backdrop-blur-md border shadow-2xl flex items-center gap-3 animate-slide-in ${type === 'error' ? 'bg-red-500/20 border-red-500/30 text-red-100' : 'bg-white/10 border-white/10 text-white'
+        }`;
+
+    // Icon
+    const icon = type === 'error'
+        ? '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
+        : '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+
+    toast.innerHTML = `${icon} <span class="text-[10px] font-bold uppercase tracking-widest">${msg}</span>`;
+
+    container.appendChild(toast);
+
+    // Remove after 3s
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
 async function save() {
