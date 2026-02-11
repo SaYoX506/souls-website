@@ -10,10 +10,18 @@
     "colorText": "#ffffffff",
     "colorBar": "#ffffffff",
     "colorBg": "#000000ff",
-    "level": 0,
-    "xp": 0,
+    "level": 1,
+    "xp": 10,
     "password": "676",
-    "logs": [],
+    "logs": [
+      {
+        "type": "add",
+        "amt": 110,
+        "reason": "حق التعب على الموقع يالmy soul",
+        "emoji": "huh",
+        "time": "2026-02-11T14:00:09.423Z"
+      }
+    ],
     "rewards": {
       "1": "بوسه مع خدك 😍😍.",
       "2": "حضن قوي 🫣🫣.",
